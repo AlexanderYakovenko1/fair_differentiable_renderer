@@ -45,6 +45,8 @@ class TriangleMesh: public SDF {
     std::vector<Triangle> triangles_;
 
 public:
+    TriangleMesh() = default;
+
     TriangleMesh(const std::vector<Vec2d>& verts, const std::vector<Vec3i>& idxs, const std::vector<Color>& colors) {
         if (idxs.size() != colors.size()) {
             throw std::invalid_argument("Colors and weights vectors should have the same size");

@@ -1,18 +1,38 @@
 #ifndef SDF_SCENE_H
 #define SDF_SCENE_H
 
+#include <utility>
 #include <vector>
 #include <map>
 #include <memory>
 #include "distance_functions.h"
 #include "image.h"
+#include "mesh.h"
+
+// https://en.wikipedia.org/wiki/Smoothstep
+double smoothstep(double edge0, double edge1, double x) {
+    if (x < edge0)
+        return 0;
+
+    if (x >= edge1)
+        return 1;
+
+    // Scale/bias into [0..1] range
+    x = (x - edge0) / (edge1 - edge0);
+
+    return x * x * (3 - 2 * x);
+}
 
 class Scene {
+    TriangleMesh mesh_;
     std::vector<std::shared_ptr<SDF>> objects_;             // all objects in the scene
     double x_min_, x_max_, y_min_, y_max_; // left right top bottom borders of scene
     RGBColor background_;
 public:
-    Scene(const std::vector<std::shared_ptr<SDF>>& objects, double x_min, double x_max, double y_min, double y_max, RGBColor background):
+    Scene(TriangleMesh mesh, const std::vector<std::shared_ptr<SDF>>& objects,
+          double x_min, double x_max, double y_min, double y_max, RGBColor background)
+     :
+        mesh_(std::move(mesh)),
         objects_(objects),
         x_min_(x_min),
         x_max_(x_max),
@@ -36,17 +56,21 @@ public:
                     double x = x_ + dist(rng) / image.height();
                     double y = y_ + dist(rng) / image.width();
 
-                    std::shared_ptr<SDF> hit;
-                    for (const auto &object: objects_) {
-                        if (object->distance(x, y) < eps) {
-                            hit = object;
-                            break;
-                        }
-                    }
                     RGBColor color = background_;
-                    if (hit) {
-                        color = hit->getColor(x, y);
+
+                    if (mesh_.distance(x, y) < eps) {
+                        // as per task description has a_i = 1
+                        // therefore overrides any other color in pixel
+                        color = mesh_.getColor(x, y);
                     }
+
+                    for (const auto &object: objects_) {
+                        double distance = object->distance(x, y);
+                        RGBColor hit_color = object->getColor(x, y);
+                        double alpha = smoothstep(0, eps, -distance);
+                        color = MixColors(hit_color, color, alpha);
+                    }
+
                     colors.push_back(color);
                     weights.push_back(1);
                 }
