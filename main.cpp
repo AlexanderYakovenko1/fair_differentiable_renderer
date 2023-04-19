@@ -34,7 +34,7 @@ Scene Scene3() {
     return Scene({}, {
 //                         std::make_shared<AxisAlignedRectangle>(0.31, 0.28, 0.25, 0.25, Color(RGBColor{0.7, 0.7, 0.0})),
 //                         std::make_shared<Circle>(0.7, 0.7, 0.1, Color(RGBColor{0.543, 0.2232, 0.42})),
-                         std::make_shared<Circle>(0.5, 0.5, 0.5, Color(RGBColor{0.1, 0.6, 1})),
+                         std::make_shared<Circle>(0.5, 0.5, 0.3, Color(RGBColor{0.1, 0.6, 1})),
                  }, 0, 1, 0, 1, RGBColor{0, 0, 0});
 }
 
@@ -46,20 +46,89 @@ Scene Test() {
     }, 0, 1, 0, 1, RGBColor{0, 0, 0});
 }
 
+template <class T>
+void PrintArray(const std::vector<T>& to_print) {
+    for (auto value : to_print) {
+        std::cout << value << ' ';
+    }
+    std::cout << std::endl;
+}
+
 int main() {
     std::mt19937 rng(1337);
 
     Image<uint8_t> rgb_image(256, 256, 3);
-    auto ref = Image<double>("../reference.png", 255.);
+    auto ref = Image<double>("../refernce_small.png", 255.);
 
-    std::cout << "Rendering Scene1..." << std::flush;
+//    std::cout << "Rendering Scene1..." << std::flush;
     auto scene = Test();
-    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-    scene.RenderToImage(rgb_image, rng, 10, 2e-3, ref);
-    std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-    Save8bitRgbImage("../scene1.png", rgb_image);
-    std::cout << " Done" << std::endl;
-    std::cout << "It took: " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << " [µs]" << std::endl;
+//    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+//    auto grads = scene.RenderToImage(rgb_image, rng, 10, 2e-3, ref);
+//    std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+//    Save8bitRgbImage("../refernce_small.png", rgb_image);
+//    std::cout << " Done" << std::endl;
+//    std::cout << "It took: " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << " [µs]" << std::endl;
+
+//    exit(0);
+    int n_iters = 1000;
+    auto params = scene.params();
+    std::vector<double> geom_params;
+    std::vector<double> color_params;
+    for (auto [geom, color] : params) {
+        geom_params.insert(geom_params.end(), geom.begin(), geom.end());
+        color_params.insert(color_params.end(), color.begin(), color.end());
+    }
+
+    Adam opt_geom(geom_params, 1e-3, 0.9, 0.9);
+    Adam opt_color(color_params, 1e-3, 0.9, 0.9);
+    for (int iter = 1; iter < n_iters; ++iter) {
+        params = scene.params();
+        geom_params.clear();
+        color_params.clear();
+        for (auto [geom, color] : params) {
+            geom_params.insert(geom_params.end(), geom.begin(), geom.end());
+            color_params.insert(color_params.end(), color.begin(), color.end());
+        }
+
+
+        std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+        auto grads = scene.RenderToImage(rgb_image, rng, 1, 2e-3, ref);
+        std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+        Save8bitRgbImage("../output/scene" + std::to_string(iter) + ".png", rgb_image);
+        std::cout << " Done" << std::endl;
+        std::cout << "It took: " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << " [µs]" << std::endl;
+
+        std::vector<double> geom_grads;
+        std::vector<double> color_grads;
+        for (auto [geom, color] : grads) {
+            geom_grads.insert(geom_grads.end(), geom.begin(), geom.end());
+            color_grads.insert(color_grads.end(), color.begin(), color.end());
+        }
+
+        std::cout << "geom params: ";
+        PrintArray(geom_params);
+        std::cout << "geom grads: ";
+        PrintArray(geom_grads);
+        std::cout << "color params: ";
+        PrintArray(color_params);
+        std::cout << "color grads: ";
+        PrintArray(color_grads);
+
+        opt_geom.step(geom_params, geom_grads, iter);
+        opt_color.step(color_params, color_grads, iter);
+
+        int geom_idx = 0;
+        int color_idx = 0;
+        for (auto& [geom, color] : params) {
+            for (auto& param : geom) {
+                param = geom_params[geom_idx++];
+            }
+            for (auto& col : color) {
+                col = color_params[color_idx++];
+            }
+        }
+        scene.updateScene(params);
+    }
 
 
 

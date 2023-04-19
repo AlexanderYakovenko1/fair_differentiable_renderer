@@ -55,12 +55,18 @@ public:
     {}
 
     template<typename pixel_type>
-    std::vector<std::vector<double>> RenderToImage(Image<pixel_type>& image, std::mt19937& rng, int num_samples=10, double eps=1e-3,
+    std::vector<std::pair<std::vector<double>,std::vector<double>>> RenderToImage(Image<pixel_type>& image, std::mt19937& rng, int num_samples=10, double eps=1e-3,
                                                    const Image<double>& reference = Image<double>()) {
         // for each obect in the scene stores geometrical and color differentials
         std::vector<std::pair<std::vector<double>,std::vector<double>>> Dscene;
 
         std::uniform_real_distribution<double> dist(-0.5, 0.5);
+
+        // zero the gradients
+        mesh_.zeroGrad();
+        for (const auto &object: objects_) {
+            object->zeroGrad();
+        }
 
         for (int i = 0; i < image.height(); ++i) {
             for (int j = 0; j < image.width(); ++j) {
@@ -167,11 +173,36 @@ public:
                 image(i, j, 2) = std::clamp(255 * color.b, 0., 255.);
             }
         }
-        std::cout << "YO" << std::endl;
+//        std::cout << "YO" << std::endl;
 
         // fill retval
         {
+            Dscene.push_back(mesh_.grad());
+            for (auto& object : objects_) {
+                Dscene.push_back(object->grad());
+            }
+        }
 
+        return Dscene;
+    }
+
+    std::vector<std::pair<std::vector<double>,std::vector<double>>> params() {
+        std::vector<std::pair<std::vector<double>,std::vector<double>>> params;
+        params.push_back(mesh_.params());
+        for (auto& object : objects_) {
+            params.push_back(object->params());
+        }
+        return params;
+    }
+
+    void updateScene(const std::vector<std::pair<std::vector<double>,std::vector<double>>>& new_params) {
+        for (int i = 0; i < new_params.size(); ++i) {
+            auto [params, color] = new_params[i];
+            if (i == 0) {
+                mesh_.updateParams(params, color);
+            } else {
+                objects_[i - 1]->updateParams(params, color);
+            }
         }
     }
 };

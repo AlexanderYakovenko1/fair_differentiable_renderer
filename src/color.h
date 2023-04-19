@@ -16,9 +16,9 @@ struct RGBColor {
 
 RGBColor MixColors(RGBColor first, RGBColor second, double alpha) {
     return {
-            sqrt((first.r) * (first.r) * alpha + (second.r) * (second.r) * (1 - alpha)),
-            sqrt((first.g) * (first.g) * alpha + (second.g) * (second.g) * (1 - alpha)),
-            sqrt((first.b) * (first.b) * alpha + (second.b) * (second.b) * (1 - alpha))
+            ((first.r) * alpha + (second.r) * (1 - alpha)),
+            ((first.g) * alpha + (second.g) * (1 - alpha)),
+            ((first.b) * alpha + (second.b) * (1 - alpha))
     };
 }
 
@@ -32,12 +32,12 @@ RGBColor MixColors(const std::vector<RGBColor>& colors, const std::vector<double
     double sum = std::accumulate(weights.begin(), weights.end(), 0.);
     RGBColor tmp{0., 0., 0.};
     for (int i = 0; i < colors.size(); ++i) {
-        tmp.r += colors[i].r * colors[i].r * weights[i];
-        tmp.g += colors[i].g * colors[i].g * weights[i];
-        tmp.b += colors[i].b * colors[i].b * weights[i];
+        tmp.r += colors[i].r * weights[i];
+        tmp.g += colors[i].g * weights[i];
+        tmp.b += colors[i].b * weights[i];
     }
 
-    return {sqrt(tmp.r / sum), sqrt(tmp.g / sum), sqrt(tmp.b / sum)};
+    return {(tmp.r / sum), (tmp.g / sum), (tmp.b / sum)};
 }
 
 // Weighted sum of linear color values
@@ -154,13 +154,21 @@ public:
         }
     }
 
+    std::vector<double> params() {
+        if (is_textured_) {
+            return {};
+        } else {
+            return {base_.r, base_.g, base_.b};
+        }
+    }
+
     void updateParams(const std::vector<double>& values) {
         if (is_textured_) {
             return;
         } else {
-            base_.r = values[0];
-            base_.g = values[1];
-            base_.b = values[2];
+            base_.r = std::clamp(values[0], 0., 1.);
+            base_.g = std::clamp(values[1], 0., 1.);
+            base_.b = std::clamp(values[2], 0., 1.);
         }
     }
 };

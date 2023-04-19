@@ -26,10 +26,16 @@ public:
     virtual void zeroGrad() {
         return;
     }
+    virtual std::pair<std::vector<double>, std::vector<double>> params() {
+        return {};
+    }
     virtual std::pair<std::vector<double>, std::vector<double>> grad() {
         return {};
     }
     virtual void accumulateGrad(const std::vector<double>& param, const std::vector<double>& color) {
+        return;
+    }
+    virtual void updateParams(const std::vector<double> &param, const std::vector<double> &color) {
         return;
     }
 };
@@ -67,10 +73,15 @@ public:
         color_.accumulateGrad(color);
     }
 
+    std::pair<std::vector<double>, std::vector<double>> params() override {
+        auto params = std::vector<double>{x_, y_, radius_};
+        return {params, color_.params()};
+    }
+
     void updateParams(const std::vector<double> &param, const std::vector<double> &color) {
         x_ = param[0];
         y_ = param[1];
-        radius_ = param[2];
+        radius_ = std::max(param[2], 0.);
 
         color_.updateParams(color);
     }
@@ -86,6 +97,7 @@ public:
 
         return d;
     }
+
     std::vector<double> Dcolor(double x, double y) override {
         return color_.Dcolor(x, y);
     }

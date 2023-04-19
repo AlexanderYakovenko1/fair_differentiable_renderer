@@ -21,15 +21,18 @@ public:
         second_.resize(params.size(), 0.);
     }
 
-    void step(std::vector<double>& params, const std::vector<double>& grad) {
+    void step(std::vector<double>& params, const std::vector<double>& grad, int iter) {
 
         for (int i = 0; i < params.size(); ++i) {
             // no bias correction
             first_[i] = beta1_ * first_[i] + (1 - beta1_) * grad[i];
             second_[i] = beta2_ * second_[i] + (1 - beta2_) * grad[i] * grad[i];
 
+            auto mu = first_[i];// / (1 - pow(beta1_, iter));
+            auto sq = second_[i];// / (1 - pow(beta2_, iter));
+
             // inplace update
-            params[i] -= lr_ * first_[i] / (sqrt(second_[i]) + eps_);
+            params[i] -= lr_ * mu / (sqrt(sq) + eps_);
         }
     }
 };
