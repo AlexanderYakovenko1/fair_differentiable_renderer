@@ -23,6 +23,19 @@ double smoothstep(double edge0, double edge1, double x) {
     return x * x * (3 - 2 * x);
 }
 
+double Dsmoothstep(double edge0, double edge1, double x) {
+    if (x < edge0)
+        return 0;
+
+    if (x >= edge1)
+        return 0;
+
+    // Scale/bias into [0..1] range
+    x = (x - edge0) / (edge1 - edge0);
+
+    return (6 * x - 6 * x * x) / (edge1 - edge0);
+}
+
 class Scene {
     TriangleMesh mesh_;
     std::vector<std::shared_ptr<SDF>> objects_;             // all objects in the scene
@@ -42,7 +55,11 @@ public:
     {}
 
     template<typename pixel_type>
-    void RenderToImage(Image<pixel_type>& image, std::mt19937& rng, int num_samples=10, double eps=1e-3) {
+    std::vector<std::vector<double>> RenderToImage(Image<pixel_type>& image, std::mt19937& rng, int num_samples=10, double eps=1e-3,
+                                                   const Image<double>& reference = Image<double>()) {
+        // for each obect in the scene stores geometrical and color differentials
+        std::vector<std::pair<std::vector<double>,std::vector<double>>> Dscene;
+
         std::uniform_real_distribution<double> dist(-0.5, 0.5);
 
         for (int i = 0; i < image.height(); ++i) {
@@ -56,19 +73,87 @@ public:
                     double x = x_ + dist(rng) / image.height();
                     double y = y_ + dist(rng) / image.width();
 
+                    std::vector<double> alphas;  // alpha mixing coefficients of final color in sample
+                    std::vector<std::vector<double>> Dparams;
+                    std::vector<std::vector<double>> Dcolors;
+                    std::vector<double> Dedges;
                     RGBColor color = background_;
+
+                    /// MESH
 
                     if (mesh_.distance(x, y) < eps) {
                         // as per task description has a_i = 1
                         // therefore overrides any other color in pixel
                         color = mesh_.getColor(x, y);
+                        alphas.push_back(1);
+                    } else {
+                        alphas.push_back(0);
                     }
+                    Dedges.push_back(0); // step func, edge sampling goes here i guess
+                    Dparams.push_back(mesh_.Dparam(x, y));
+                    Dcolors.push_back(mesh_.Dcolor(x, y));
+
+                    /// END MESH
+
+
+                    /// SDF
 
                     for (const auto &object: objects_) {
                         double distance = object->distance(x, y);
                         RGBColor hit_color = object->getColor(x, y);
                         double alpha = smoothstep(0, eps, -distance);
+                        double Dedge = Dsmoothstep(0, eps, -distance);
+//                        std::cout << distance << " " << Dedge << std::endl;
                         color = MixColors(hit_color, color, alpha);
+
+                        for (auto& a: alphas) {
+                            a *= (1 - alpha);
+                        }
+                        alphas.push_back(alpha);
+                        Dedges.push_back(Dedge);
+                        Dparams.push_back(object->Dparam(x, y));
+                        Dcolors.push_back(object->Dcolor(x, y));
+                    }
+
+                    /// END SDF
+
+                    // normalize alphas by number of samples
+                    for (double& alpha : alphas) {
+                        alpha /= num_samples;
+                    }
+
+
+                    // Calculate all the derivatives if reference is provided
+                    if (reference.size()) {
+                        auto Dmse = RGBColor{
+                                color.r - reference(i, j, 0),
+                                color.g - reference(i, j, 1),
+                                color.b - reference(i, j, 2),
+                        };
+
+                        for (int i = 0; i < alphas.size(); ++i) {
+                            auto alpha = alphas[i];
+                            auto Dedge = Dedges[i];
+                            auto Dparam = Dparams[i];
+                            auto Dcolor = Dcolors[i];
+
+                            for (auto& param : Dparam) {
+                                param *= -Dedge * alpha * (Dmse.r + Dmse.g + Dmse.b);
+                            }
+                            /// rgb
+                            for (int j = 0; j < Dcolor.size(); j += 3) {
+                                Dcolor[j + 0] *= alpha * Dmse.r;
+                                Dcolor[j + 1] *= alpha * Dmse.g;
+                                Dcolor[j + 2] *= alpha * Dmse.b;
+                            }
+
+                            if (i == 0) {
+                                mesh_.accumulateGrad(Dparam, Dcolor);
+                            } else {
+                                objects_[i - 1]->accumulateGrad(Dparam, Dcolor);
+                            }
+                        }
+
                     }
 
                     colors.push_back(color);
@@ -81,6 +166,12 @@ public:
                 image(i, j, 1) = std::clamp(255 * color.g, 0., 255.);
                 image(i, j, 2) = std::clamp(255 * color.b, 0., 255.);
             }
+        }
+        std::cout << "YO" << std::endl;
+
+        // fill retval
+        {
+
         }
     }
 };

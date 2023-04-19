@@ -34,25 +34,41 @@ Scene Scene3() {
     return Scene({}, {
 //                         std::make_shared<AxisAlignedRectangle>(0.31, 0.28, 0.25, 0.25, Color(RGBColor{0.7, 0.7, 0.0})),
 //                         std::make_shared<Circle>(0.7, 0.7, 0.1, Color(RGBColor{0.543, 0.2232, 0.42})),
-                         std::make_shared<Circle>(0.23, 0.72, 0.12, Color(RGBColor{0.1, 0.6, 1})),
+                         std::make_shared<Circle>(0.5, 0.5, 0.5, Color(RGBColor{0.1, 0.6, 1})),
                  }, 0, 1, 0, 1, RGBColor{0, 0, 0});
+}
+
+Scene Test() {
+    return Scene({}, {
+//                         std::make_shared<AxisAlignedRectangle>(0.31, 0.28, 0.25, 0.25, Color(RGBColor{0.7, 0.7, 0.0})),
+//                         std::make_shared<Circle>(0.7, 0.7, 0.1, Color(RGBColor{0.543, 0.2232, 0.42})),
+            std::make_shared<Circle>(0.5, 0.55, 0.5, Color(RGBColor{0.9, 0.2, 0.1})),
+    }, 0, 1, 0, 1, RGBColor{0, 0, 0});
 }
 
 int main() {
     std::mt19937 rng(1337);
 
-
     Image<uint8_t> rgb_image(256, 256, 3);
+    auto ref = Image<double>("../reference.png", 255.);
 
     std::cout << "Rendering Scene1..." << std::flush;
-    auto scene = Scene3();
+    auto scene = Test();
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-    scene.RenderToImage(rgb_image, rng, 10, 2e-3);
+    scene.RenderToImage(rgb_image, rng, 10, 2e-3, ref);
     std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
     Save8bitRgbImage("../scene1.png", rgb_image);
     std::cout << " Done" << std::endl;
     std::cout << "It took: " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << " [µs]" << std::endl;
 
+
+
+//    double eps = 1e-5;
+//    for (double x = -0.2; x < 1.2; x+=0.1) {
+//        double val = smoothstep(0, 1, x);
+//        double next = smoothstep(0, 1, x + eps);
+//        std::cout << (next - val) / eps << " " << Dsmoothstep(0, 1, x) << std::endl;
+//    }
 
 //    std::vector<double> x = {30};
 //    auto opt = Adam(x, 0.1);

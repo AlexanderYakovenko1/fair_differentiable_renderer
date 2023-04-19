@@ -61,8 +61,8 @@ RGBColor InterpolateColors(const std::vector<RGBColor>& colors, const std::vecto
 class Color {
     RGBColor base_;
     Image<double> texture_;
+    std::vector<double> accumulated_;
 
-    bool is_solid_;
     bool is_textured_;
 
     RGBColor sampleTexture(size_t x, size_t y) {
@@ -76,18 +76,19 @@ class Color {
 public:
     Color(RGBColor base):
             base_(base),
-            is_solid_(true),
             is_textured_(false)
-    {}
+    {
+        accumulated_.resize(3, 0.);
+    }
 
     Color(Image<double>& texture):
             texture_(texture),
-            is_solid_(false),
             is_textured_(true)
     {
         if (texture_.channels() != 3) {
             throw std::invalid_argument("Image must have 3 color channels");
         }
+        accumulated_.resize(texture.size(), 0.);
     }
 
     RGBColor getColor(double u=0.0, double v=0.0) {
@@ -126,6 +127,40 @@ public:
             return InterpolateColors(colors, weights);
         } else {
             return base_;
+        }
+    }
+
+    std::vector<double> grad() {
+        return accumulated_;
+    }
+
+    void zeroGrad() {
+        std::fill(accumulated_.begin(), accumulated_.end(), 0.0);
+    }
+
+    void accumulateGrad(const std::vector<double>& values) {
+        for (int i = 0; i < accumulated_.size(); ++i) {
+            accumulated_[i] += values[i];
+        }
+    }
+
+    std::vector<double> Dcolor(double x, double y) {
+        if (is_textured_) {
+            return {}; // TODO: finish textured derivative
+            // should return zero lattice with bilinear interpolation weights at (x, y)
+        } else {
+            // RGBcolor derivatives w.r.t. to each color
+            return {1., 1., 1.};
+        }
+    }
+
+    void updateParams(const std::vector<double>& values) {
+        if (is_textured_) {
+            return;
+        } else {
+            base_.r = values[0];
+            base_.g = values[1];
+            base_.b = values[2];
         }
     }
 };

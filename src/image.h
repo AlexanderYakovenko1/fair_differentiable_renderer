@@ -47,6 +47,12 @@ public:
         return pixel_data_[idx];
     }
 
+    const pixel_type& operator()(size_t x, size_t y, size_t z) const {
+        size_t idx = x * width_ * channels_ + y * channels_ + z;
+
+        return pixel_data_[idx];
+    }
+
     size_t size() const {
         return size_;
     }
