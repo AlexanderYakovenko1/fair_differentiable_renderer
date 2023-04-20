@@ -78,7 +78,7 @@ public:
         return {params, color_.params()};
     }
 
-    void updateParams(const std::vector<double> &param, const std::vector<double> &color) {
+    void updateParams(const std::vector<double> &param, const std::vector<double> &color) override {
         x_ = param[0];
         y_ = param[1];
         radius_ = std::max(param[2], 0.);
@@ -90,11 +90,7 @@ public:
         double dx = -(x - x_) / std::sqrt((x - x_) * (x - x_) + (y - y_) * (y - y_));
         double dy = -(y - y_) / std::sqrt((x - x_) * (x - x_) + (y - y_) * (y - y_));
         double dradius = -1;
-//        auto dcolor = color_.Dcolor(x, y);
-//
         std::vector<double> d = std::vector<double>{dx, dy, dradius};
-//        d.insert(d.end(), dcolor.begin(), dcolor.end());
-
         return d;
     }
 
@@ -107,6 +103,8 @@ class AxisAlignedRectangle: public SDF {
     double x_, y_;
     double width_, height_;
     Color color_;
+
+    std::vector<double> accumulated_;
 public:
     AxisAlignedRectangle(double x, double y, double width, double height, Color color):
         x_(x),
@@ -114,7 +112,9 @@ public:
         width_(width),
         height_(height),
         color_(color)
-    {}
+    {
+        accumulated_.resize(4, 0.);
+    }
 
     double distance(double x, double y) override {
         double dx = std::abs(x - x_) - width_;
@@ -125,6 +125,55 @@ public:
 
     RGBColor getColor(double x, double y) override {
         return color_.getColor(distance(x, y), y - y_ - height_);
+    }
+
+    std::pair<std::vector<double>, std::vector<double>> grad() override {
+        return {accumulated_, color_.grad()};
+    }
+
+    void zeroGrad() override {
+        std::fill(accumulated_.begin(), accumulated_.end(), 0.0);
+        color_.zeroGrad();
+    }
+
+    void accumulateGrad(const std::vector<double> &param, const std::vector<double> &color) override {
+        for (int i = 0; i < accumulated_.size(); ++i) {
+            accumulated_[i] += param[i];
+        }
+        color_.accumulateGrad(color);
+    }
+
+    std::pair<std::vector<double>, std::vector<double>> params() override {
+        auto params = std::vector<double>{x_, y_, width_, height_};
+        return {params, color_.params()};
+    }
+
+    void updateParams(const std::vector<double> &param, const std::vector<double> &color) override {
+        x_ = param[0];
+        y_ = param[1];
+        width_ = std::max(param[2], 0.);
+        height_ = std::max(param[3], 0.);
+
+        color_.updateParams(color);
+    }
+
+    std::vector<double> Dparam(double x, double y) override {
+        double x_hat = std::abs(x - x_) - width_;
+        double y_hat = std::abs(y - y_) - height_;
+
+        double distance = std::sqrt(std::max(x_hat, 0.0) * std::max(x_hat, 0.0) + std::max(y_hat, 0.0) * std::max(y_hat, 0.0)) + std::min(std::max(x_hat, y_hat), 0.0);
+
+        double Dx = -0.5 / distance * (2 * x_hat * (x - x_ > 0 ? 1 : -1) * (x_hat > 0) + (x - x_ > 0 ? 1 : -1) * (y_hat < x_hat && x_hat < 0.));
+        double Dy = -0.5 / distance * (2 * y_hat * (y - y_ > 0 ? 1 : -1) * (y_hat > 0) + (y - y_ > 0 ? 1 : -1) * (x_hat < y_hat && y_hat < 0.));
+
+        double Dwidth = 0.5 / distance * (2 * x_hat * -1 * (x_hat > 0) + -1 * (y_hat < x_hat && x_hat < 0.));
+        double Dheight = 0.5 / distance * (2 * y_hat * -1 * (y_hat > 0) + -1 * (x_hat < y_hat && y_hat < 0.));
+
+        return {-Dx, -Dy, -Dwidth, -Dheight};
+    }
+
+    std::vector<double> Dcolor(double x, double y) override {
+        return color_.Dcolor(x, y);
     }
 };
 

@@ -31,18 +31,18 @@ Scene Scene2() {
 }
 
 Scene Scene3() {
-    return Scene({}, {
-//                         std::make_shared<AxisAlignedRectangle>(0.31, 0.28, 0.25, 0.25, Color(RGBColor{0.7, 0.7, 0.0})),
-//                         std::make_shared<Circle>(0.7, 0.7, 0.1, Color(RGBColor{0.543, 0.2232, 0.42})),
-                         std::make_shared<Circle>(0.5, 0.5, 0.3, Color(RGBColor{0.1, 0.6, 1})),
+    return Scene({}, { //0.6, 0.7, 0.1, 0.15 // 0.85, 0.3, 0.6
+                         std::make_shared<AxisAlignedRectangle>(0.31, 0.28, 0.25, 0.25, Color(RGBColor{0.7, 0.7, 0.0})),
+                         std::make_shared<Circle>(0.7, 0.7, 0.1, Color(RGBColor{0.543, 0.2232, 0.42})),
+                         std::make_shared<Circle>(0.23, 0.72, 0.12, Color(RGBColor{0.1, 0.6, 1})),
                  }, 0, 1, 0, 1, RGBColor{0, 0, 0});
 }
 
 Scene Test() {
     return Scene({}, {
-//                         std::make_shared<AxisAlignedRectangle>(0.31, 0.28, 0.25, 0.25, Color(RGBColor{0.7, 0.7, 0.0})),
+                         std::make_shared<AxisAlignedRectangle>(0.31, 0.28, 0.25, 0.25, Color(RGBColor{0.7, 0.7, 0.0})),
 //                         std::make_shared<Circle>(0.7, 0.7, 0.1, Color(RGBColor{0.543, 0.2232, 0.42})),
-            std::make_shared<Circle>(0.5, 0.55, 0.5, Color(RGBColor{0.9, 0.2, 0.1})),
+//            std::make_shared<Circle>(0.5, 0.55, 0.5, Color(RGBColor{0.9, 0.2, 0.1})),
     }, 0, 1, 0, 1, RGBColor{0, 0, 0});
 }
 
@@ -54,20 +54,56 @@ void PrintArray(const std::vector<T>& to_print) {
     std::cout << std::endl;
 }
 
+double calcMSE(const Image<uint8_t>& result, const Image<double>& reference, double mult_res = 1/255., double mult_ref = 1.) {
+    double sum = 0.0;
+    for (int i = 0; i < result.height(); ++i) {
+        for (int j = 0; j < result.height(); ++j) {
+            for (int k = 0; k < result.height(); ++k) {
+                auto diff = result(i, j, k) * mult_res - reference(i, j, k) * mult_ref;
+                sum += diff * diff;
+            }
+        }
+    }
+    return sqrt(sum);
+}
+
 int main() {
     std::mt19937 rng(1337);
 
     Image<uint8_t> rgb_image(256, 256, 3);
-    auto ref = Image<double>("../refernce_small.png", 255.);
+    auto ref = Image<double>("../02_reference.png", 255.);
 
 //    std::cout << "Rendering Scene1..." << std::flush;
-    auto scene = Test();
+    auto scene = Scene3();
 //    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 //    auto grads = scene.RenderToImage(rgb_image, rng, 10, 2e-3, ref);
 //    std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-//    Save8bitRgbImage("../refernce_small.png", rgb_image);
+//    Save8bitRgbImage("../refernce_rect.png", rgb_image);
 //    std::cout << " Done" << std::endl;
 //    std::cout << "It took: " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << " [µs]" << std::endl;
+    double eps = 1e-5;
+    auto src = AxisAlignedRectangle(0.5, 0.65, 0.3, 0.15, Color(RGBColor{0.85, 0.3, 0.6}));
+    auto dx = AxisAlignedRectangle(0.5+eps, 0.65, 0.3, 0.15, Color(RGBColor{0.85, 0.3, 0.6}));
+    auto dy = AxisAlignedRectangle(0.5, 0.65+eps, 0.3, 0.15, Color(RGBColor{0.85, 0.3, 0.6}));
+    auto dw = AxisAlignedRectangle(0.5, 0.65, 0.3+eps, 0.15, Color(RGBColor{0.85, 0.3, 0.6}));
+    auto dh = AxisAlignedRectangle(0.5, 0.65, 0.3, 0.15+eps, Color(RGBColor{0.85, 0.3, 0.6}));
+    for (double x = 0.; x < 1.; x+=0.1) {
+        for (double y = 0.; y < 1.; y+=0.1) {
+            auto grad = src.Dparam(x, y);
+
+            auto dist = src.distance(x, y);
+            auto dx_diff = (dx.distance(x, y) - dist) / eps;
+            auto dy_diff = (dy.distance(x, y) - dist) / eps;
+            auto dw_diff = (dw.distance(x, y) - dist) / eps;
+            auto dh_diff = (dh.distance(x, y) - dist) / eps;
+
+            std::cout << "got ";
+            PrintArray(grad);
+            std::cout << "diff: ";
+            PrintArray<double>({dx_diff, dy_diff, dw_diff, dh_diff});
+            std::cout << std::endl;
+        }
+    }
 
 //    exit(0);
     int n_iters = 1000;
@@ -79,8 +115,8 @@ int main() {
         color_params.insert(color_params.end(), color.begin(), color.end());
     }
 
-    Adam opt_geom(geom_params, 1e-3, 0.9, 0.9);
-    Adam opt_color(color_params, 1e-3, 0.9, 0.9);
+    Adam opt_geom(geom_params, 2e-3, 0.9, 0.9);
+    Adam opt_color(color_params, 2e-3, 0.9, 0.9);
     for (int iter = 1; iter < n_iters; ++iter) {
         params = scene.params();
         geom_params.clear();
@@ -94,7 +130,7 @@ int main() {
         std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
         auto grads = scene.RenderToImage(rgb_image, rng, 1, 2e-3, ref);
         std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-        Save8bitRgbImage("../output/scene" + std::to_string(iter) + ".png", rgb_image);
+        Save8bitRgbImage("../out_rect/scene" + std::to_string(iter) + ".png", rgb_image);
         std::cout << " Done" << std::endl;
         std::cout << "It took: " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << " [µs]" << std::endl;
 
@@ -129,6 +165,7 @@ int main() {
         }
         scene.updateScene(params);
     }
+    std::cout << "MSE: " << calcMSE(rgb_image, ref) << std::endl;
 
 
 
