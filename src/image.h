@@ -19,9 +19,13 @@ private:
 public:
     Image() = default;
 
-    Image(const std::string& filepath, pixel_type div = pixel_type(1)) {
+    Image(const std::string& filepath, pixel_type div = pixel_type(1), int chans=3) {
         int width, height, channels;
-        uint8_t* data = stbi_load(filepath.c_str(), &width, &height, &channels, 3);
+        uint8_t* data = stbi_load(filepath.c_str(), &width, &height, &channels, chans);
+        if (data == nullptr) {
+            std::cerr << "Image failed to load" << std::endl;
+            exit(1);
+        }
         height_ = height;
         width_ = width;
         channels_ = channels;
@@ -67,6 +71,14 @@ public:
 
     size_t channels() const {
         return channels_;
+    }
+
+    std::vector<pixel_type> data() {
+        return pixel_data_;
+    }
+
+    void updateImage(const std::vector<pixel_type>& pixel_values) {
+        std::copy(pixel_values.begin(), pixel_values.end(), pixel_data_.begin());
     }
 
     friend void Save8bitRgbImage(const std::string&, const Image<uint8_t>&);

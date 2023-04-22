@@ -245,11 +245,13 @@ class SDFImage: public SDF {
 
     int width_, height_;
     int max_side_;
-    uint8_t* data_;
+    Image<double> image_;
 
-    uint8_t getPixel(size_t i, size_t j) {
+    std::vector<double> accumulated_;
+
+    double getPixel(size_t i, size_t j) {
         if (i < height_ && j < width_) {
-            return data_[i * width_ + j];
+            return image_(i, j, 0);
         } else {
             return 0;
         }
@@ -257,13 +259,31 @@ class SDFImage: public SDF {
 public:
     SDFImage(const std::string& filepath, double x, double y, double scale, Color color): x_(x), y_(y), scale_(scale),
                                                                                           color_(color) {
-        int channels;
-        data_ = stbi_load(filepath.c_str(), &width_, &height_, &channels, 1);
+        image_ = Image<double>(filepath, 255., 1);
+        width_ = image_.width();
+        height_ = image_.height();
         max_side_ = std::max(width_, height_);
-        if (data_ == nullptr) {
-            std::cerr << "Image failed to load" << std::endl;
-            exit(1);
+
+        x_ = x_ - scale_ * width_ / max_side_ / 2;
+        y_ = y_ - scale_ * height_ / max_side_ / 2;
+
+        accumulated_.resize(height_ * width_, 0);
+    }
+
+    SDFImage(int height, int width, double x, double y, double scale, Color color)
+     : height_(height), width_(width), x_(x), y_(y), scale_(scale), color_(color) {
+        image_ = Image<double>(height_, width_, 1);
+
+        for (int y = 0; y < height_; ++y) {
+            for (int x = 0; x < width_; ++x) {
+                image_(y, x, 0) = 0.5 + 1e-3;
+            }
         }
+
+        accumulated_.resize(height_ * width_, 0);
+
+        max_side_ = std::max(width_, height_);
+
         x_ = x_ - scale_ * width_ / max_side_ / 2;
         y_ = y_ - scale_ * height_ / max_side_ / 2;
     }
@@ -281,21 +301,76 @@ public:
             double interp_y = std::modf(iy, &iy);
 
             double pixels[4] = {
-                    static_cast<double>(getPixel(static_cast<size_t>(iy    ), static_cast<size_t>(ix    ))),
-                    static_cast<double>(getPixel(static_cast<size_t>(iy    ), static_cast<size_t>(ix + 1))),
-                    static_cast<double>(getPixel(static_cast<size_t>(iy + 1), static_cast<size_t>(ix    ))),
-                    static_cast<double>(getPixel(static_cast<size_t>(iy + 1), static_cast<size_t>(ix + 1)))
+                    getPixel(static_cast<size_t>(iy    ), static_cast<size_t>(ix    )),
+                    getPixel(static_cast<size_t>(iy    ), static_cast<size_t>(ix + 1)),
+                    getPixel(static_cast<size_t>(iy + 1), static_cast<size_t>(ix    )),
+                    getPixel(static_cast<size_t>(iy + 1), static_cast<size_t>(ix + 1))
             };
             double value = pixels[0] * (1 - interp_y) * (1 - interp_x) +
                            pixels[1] * (1 - interp_y) * (    interp_x) +
                            pixels[2] * (    interp_y) * (1 - interp_x) +
                            pixels[3] * (    interp_y) * (    interp_x);
-            return (128. - value) / 255.;
+            return 0.5 - value;
         }
     }
 
     RGBColor getColor(double x, double y) override {
         return color_.getColor(distance(x, y), y - y_ - scale_);
+    }
+
+    std::pair<std::vector<double>, std::vector<double>> grad() override {
+        return {accumulated_, color_.grad()};
+    }
+
+    void zeroGrad() override {
+        std::fill(accumulated_.begin(), accumulated_.end(), 0.0);
+        color_.zeroGrad();
+    }
+
+    void accumulateGrad(const std::vector<double> &param, const std::vector<double> &color) override {
+        for (int i = 0; i < accumulated_.size(); ++i) {
+            accumulated_[i] += param[i];
+        }
+        color_.accumulateGrad(color);
+    }
+
+    std::pair<std::vector<double>, std::vector<double>> params() override {
+        // NOTE: size and scale are left out, only the pixel values
+        auto params = image_.data();
+        return {params, color_.params()};
+    }
+
+    void updateParams(const std::vector<double> &param, const std::vector<double> &color) override {
+        image_.updateImage(param);
+        color_.updateParams(color);
+    }
+
+    std::vector<double> Dparam(double x, double y) override {
+        std::vector<double> d(width_ * height_, 0.);
+
+        double ix = x - x_;
+        double iy = y - y_;
+        if (ix < 0 || iy < 0 || ix >= scale_ * width_ / max_side_ || iy >= scale_ * height_ / max_side_) {
+            return d;
+        } else {
+            // bilinear interpolation
+            ix *= max_side_ / scale_;
+            iy *= max_side_ / scale_;
+            double interp_x = std::modf(ix, &ix);
+            double interp_y = std::modf(iy, &iy);
+
+            if (iy + 1 < height_ && ix + 1 < width_) {
+                d[static_cast<size_t>(iy    ) * width_ + static_cast<size_t>(ix    )] = -(1 - interp_y) * (1 - interp_x);
+                d[static_cast<size_t>(iy    ) * width_ + static_cast<size_t>(ix + 1)] = -(1 - interp_y) * (    interp_x);
+                d[static_cast<size_t>(iy + 1) * width_ + static_cast<size_t>(ix    )] = -(    interp_y) * (1 - interp_x);
+                d[static_cast<size_t>(iy + 1) * width_ + static_cast<size_t>(ix + 1)] = -(    interp_y) * (    interp_x);
+            }
+        }
+        return d;
+    }
+
+    std::vector<double> Dcolor(double x, double y) override {
+        return color_.Dcolor(x, y);
     }
 };
 
