@@ -103,10 +103,8 @@ public:
             u = u > 0 ? u : 1 + u;
             v = v > 0 ? v : 1 + v;
 
-            double x = u * (texture_.width() - 1);
-            double y = v * (texture_.height() - 1);
-
-//            std::cout << x << " " << y << std::endl;
+            double x = u * (texture_.height() - 1);
+            double y = v * (texture_.width() - 1);
 
             double interp_x = modf(x, &tmp);
             double interp_y = modf(y, &tmp);
@@ -144,9 +142,51 @@ public:
         }
     }
 
-    std::vector<double> Dcolor(double x, double y) {
+    std::vector<double> Dcolor(double u, double v) {
         if (is_textured_) {
-            return {}; // TODO: finish textured derivative
+            std::vector<double> d(texture_.size(), 0.);
+
+            double tmp;
+
+            // u and v must be from 0 to 1
+            // cyclic padding
+            u = modf(u, &tmp);
+            v = modf(v, &tmp);
+
+            u = u > 0 ? u : 1 + u;
+            v = v > 0 ? v : 1 + v;
+
+            double x = u * (texture_.width() - 1);
+            double y = v * (texture_.height() - 1);
+
+            double interp_x = modf(x, &tmp);
+            double interp_y = modf(y, &tmp);
+
+//            std::vector<RGBColor> colors = {
+//                    sampleTexture(floor(x), floor(y)),
+//                    sampleTexture(ceil(x), floor(y)),
+//                    sampleTexture(floor(x), ceil(y)),
+//                    sampleTexture(ceil(x), ceil(y))
+//            };
+//            std::vector<double> weights = {
+//                    (1 - interp_y) * (1 - interp_x),
+//                    (1 - interp_y) * (    interp_x),
+//                    (    interp_y) * (1 - interp_x),
+//                    (    interp_y) * (    interp_x)
+//            };
+
+            for (int k = 0; k < 3; ++k) {
+                d[3 * (static_cast<size_t>(floor(x)) * texture_.width() + static_cast<size_t>(floor(y))) + k] =
+                        (1 - interp_y) * (1 - interp_x);
+                d[3 * (static_cast<size_t>(ceil(x)) * texture_.width() + static_cast<size_t>(floor(y))) + k] =
+                        (1 - interp_y) * (    interp_x);
+                d[3 * (static_cast<size_t>(floor(x)) * texture_.width() + static_cast<size_t>(ceil(y))) + k] =
+                        (    interp_y) * (1 - interp_x);
+                d[3 * (static_cast<size_t>(ceil(x)) * texture_.width() + static_cast<size_t>(ceil(y))) + k] =
+                        (    interp_y) * (    interp_x);
+            }
+
+            return d;
             // should return zero lattice with bilinear interpolation weights at (x, y)
         } else {
             // RGBcolor derivatives w.r.t. to each color
@@ -156,7 +196,7 @@ public:
 
     std::vector<double> params() {
         if (is_textured_) {
-            return {};
+            return texture_.data();
         } else {
             return {base_.r, base_.g, base_.b};
         }
@@ -164,7 +204,10 @@ public:
 
     void updateParams(const std::vector<double>& values) {
         if (is_textured_) {
-            return;
+            texture_.updateImage(values);
+            for (int i = 0; i < texture_.size(); ++i) {
+                texture_(0, 0, i) = std::clamp(texture_(0, 0, i), 0., 1.);
+            }
         } else {
             base_.r = std::clamp(values[0], 0., 1.);
             base_.g = std::clamp(values[1], 0., 1.);

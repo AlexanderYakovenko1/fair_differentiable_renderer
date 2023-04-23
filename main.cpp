@@ -52,7 +52,7 @@ double optimizeScene(Scene& scene, Image<uint8_t>& rgb_image, const Image<double
     }
 
     Adam opt_geom(geom_params, 2e-3, 0.9, 0.9);
-    Adam opt_color(color_params, 2e-3, 0.9, 0.9);
+    Adam opt_color(color_params, 2e-2, 0.9, 0.9);
 
     for (int iter = 1; iter < n_iters; ++iter) {
         params = scene.params();
@@ -121,9 +121,9 @@ double optimizeScene(Scene& scene, Image<uint8_t>& rgb_image, const Image<double
 void Task1_Meshes_and_Textures(std::mt19937& rng) {
     Image<uint8_t> rgb_image(256, 256, 3);
 
-    auto grass = Image<double>("../grass_1k.png", 255.);
+    auto grass = Image<double>("../grass_64.png", 255.);
 
-    auto scene =  Scene(TriangleMesh(
+    auto scene = Scene(TriangleMesh(
                 {Vec2d(0.0, 0.0), Vec2d(0.5, 0.0), Vec2d(0.0, 0.5),
                  Vec2d(0.5, 0.0), Vec2d(1.0, 0.0), Vec2d(0.5, 0.5),
                  Vec2d(0.04, 0.51), Vec2d(0.37, 0.61), Vec2d(0.17, 0.94)},
@@ -164,12 +164,36 @@ void Task2_Differentiable_SDF_image(std::mt19937& rng) {
     std::cout << "MSE: " << calcMSE(rgb_image, ref) << std::endl;
 }
 
+void Task3_Texture_Derivatives(std::mt19937& rng) {
+    Image<uint8_t> rgb_image(256, 256, 3);
+
+    auto ref = Image<double>("../0_3_reference.png", 255.);
+
+    auto tex1 = Image<double>(32, 32, 3);
+    auto tex2 = Image<double>(32, 32, 3);
+    for (int i = 0; i < tex1.size(); ++i) {
+        tex1(0, 0, i) = 0.5;
+        tex2(0, 0, i) = 0.5;
+    }
+
+    auto scene = Scene(TriangleMesh(
+                               {Vec2d(0.0, 0.0), Vec2d(0.5, 0.0), Vec2d(0.0, 0.5),
+                                Vec2d(0.5, 0.0), Vec2d(1.0, 0.0), Vec2d(0.5, 0.5),
+                                Vec2d(0.0, 0.5), Vec2d(0.5, 0.5), Vec2d(0.0, 1.0)},
+                               {Vec3i(0, 1, 2), Vec3i(3, 4, 5), Vec3i(6, 7, 8)},
+                               {Color(tex1), Color(tex2), Color(RGBColor{1, 0, 0})}),{},
+                       0, 1, 0, 1, RGBColor{0, 0, 0});
+
+    optimizeScene(scene, rgb_image, ref, rng, 300, "../texture_progress");
+    renderScene(scene, rgb_image, rng, "../task3_texture.png");
+    std::cout << "MSE: " << calcMSE(rgb_image, ref) << std::endl;
+}
+
 int main() {
     std::mt19937 rng(1337);
 
-    Task1_Meshes_and_Textures(rng);
-    Task2_Differentiable_SDF_primitives(rng);
-
-//    Task2_Differentiable_SDF_image(rng);
-
+//    Task1_Meshes_and_Textures(rng);
+//    Task2_Differentiable_SDF_primitives(rng);
+    Task2_Differentiable_SDF_image(rng);
+//    Task3_Texture_Derivatives(rng);
 }
