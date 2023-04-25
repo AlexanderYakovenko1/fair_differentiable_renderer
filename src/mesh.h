@@ -174,6 +174,57 @@ public:
 
         return color_.Dcolor(w, v);
     }
+
+    std::vector<double> RandomEdgePoints(std::mt19937 &rng, Vec2d& p, Vec2d &p_in, Vec2d &p_out) {
+        auto d = std::vector<double>(6, 0.);
+
+        std::uniform_int_distribution<int> edge(0, 2);
+        std::uniform_real_distribution<double> uniform(0., 1.);
+        int edge_idx = edge(rng);
+        auto t = uniform(rng);
+
+        Vec2d p0, p1;
+        switch (edge_idx) {
+            default:
+            case 0:
+                p0 = p0_;
+                p1 = p1_;
+                d[0] = 1 - t;
+                d[1] = 1 - t;
+                d[2] =     t;
+                d[3] =     t;
+                break;
+            case 1:
+                p0 = p1_;
+                p1 = p2_;
+                d[2] = 1 - t;
+                d[3] = 1 - t;
+                d[4] =     t;
+                d[5] =     t;
+                break;
+            case 2:
+                p0 = p2_;
+                p1 = p0_;
+                d[0] =     t;
+                d[1] =     t;
+                d[4] = 1 - t;
+                d[5] = 1 - t;
+                break;
+        }
+
+        p = p0 + (p1 - p0) * t;
+        auto n = (p1 - p0).transpose().normalize();
+
+        p_in  = p - n * 1e-3;
+        p_out = p + n * 1e-3;
+
+        for (int i = 0; i < d.size(); i += 2) {
+            d[i    ] *= n.x;
+            d[i + 1] *= n.y;
+        }
+
+        return d;
+    }
 };
 
 class TriangleMesh: public SDF {
@@ -291,6 +342,20 @@ public:
             }
 
             d.insert(d.end(), D.begin(), D.end());
+        }
+
+        return d;
+    }
+
+    std::vector<double> RandomEdgePoints(std::mt19937& rng, Vec2d& p, Vec2d& p_in, Vec2d& p_out) {
+        std::vector<double> d(6 * triangles_.size(), 0);
+
+        std::uniform_int_distribution<int> tr(0, triangles_.size()-1);
+        int tr_idx = tr(rng);
+
+        auto D = triangles_[tr_idx].RandomEdgePoints(rng, p, p_in, p_out);
+        for (int i = tr_idx * 6; i < tr_idx * 6 + 6; ++i) {
+            d[i] = D[i - tr_idx * 6];
         }
 
         return d;

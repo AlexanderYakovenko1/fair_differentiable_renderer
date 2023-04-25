@@ -42,7 +42,9 @@ void renderScene(Scene& scene, Image<uint8_t>& rgb_image, std::mt19937& rng, con
 }
 
 double optimizeScene(Scene& scene, Image<uint8_t>& rgb_image, const Image<double>& ref, std::mt19937& rng,
-                     int n_iters=100, const std::string& output_dir="../output", bool save_progress=true, bool verbose=false) {
+                     int n_iters=100, const std::string& output_dir="../output",
+                     double geom_lr=2e-3, double color_lr=2e-3,
+                     bool save_progress=true, bool verbose=false) {
     auto params = scene.params();
     std::vector<double> geom_params;
     std::vector<double> color_params;
@@ -51,8 +53,8 @@ double optimizeScene(Scene& scene, Image<uint8_t>& rgb_image, const Image<double
         color_params.insert(color_params.end(), color.begin(), color.end());
     }
 
-    Adam opt_geom(geom_params, 2e-3, 0.9, 0.9);
-    Adam opt_color(color_params, 2e-3, 0.9, 0.9);
+    Adam opt_geom(geom_params, geom_lr, 0.9, 0.9);
+    Adam opt_color(color_params, color_lr, 0.9, 0.9);
 
     for (int iter = 1; iter < n_iters; ++iter) {
         params = scene.params();
@@ -68,6 +70,7 @@ double optimizeScene(Scene& scene, Image<uint8_t>& rgb_image, const Image<double
 
         std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
         auto grads = scene.RenderToImage(rgb_image, rng, 1, 2e-3, ref);
+        grads = scene.EdgeSampling(rng, ref);
         std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
 
         if (save_progress) {
@@ -206,12 +209,13 @@ void Task3_Edge_Sampling(std::mt19937& rng) {
                                 Vec2d(0.45, 0.0), Vec2d(0.97, 0.09), Vec2d(0.41, 0.45),
                                 Vec2d(0.0, 0.45), Vec2d(0.45, 0.51), Vec2d(0.0, 0.86)},
                                {Vec3i(0, 1, 2), Vec3i(3, 4, 5), Vec3i(6, 7, 8)},
-//                               {Color(tex1), Color(tex2), Color(RGBColor{1, 0, 0})}),
-                               {Color(RGBColor{0.5, 0.5, 0.5}), Color(RGBColor{0.5, 0.5, 0.5}), Color(RGBColor{1, 0, 0})}),
+                               {Color(tex1), Color(tex2), Color(RGBColor{1, 0, 0})}),
+//                               {Color(RGBColor{0.5, 0.5, 0.5}), Color(RGBColor{0.5, 0.5, 0.5}), Color(RGBColor{1, 0, 0})}),
                        {std::make_shared<Circle>(0.7, 0.7, 0.1, Color(RGBColor{0.543, 0.2232, 0.42}))},
                        0, 1, 0, 1, RGBColor{0, 0, 0});
 
-    optimizeScene(scene, rgb_image, ref, rng, 300, "../texture_progress");
+    optimizeScene(scene, rgb_image, ref, rng, 100, "../edge_geom_progress", 2e-3, 0);
+    optimizeScene(scene, rgb_image, ref, rng, 100, "../edge_color_progress", 0, 2e-2);
     renderScene(scene, rgb_image, rng, "../task3_edge_sampling.png");
     std::cout << "MSE: " << calcMSE(rgb_image, ref) << std::endl;
 }
@@ -219,10 +223,11 @@ void Task3_Edge_Sampling(std::mt19937& rng) {
 void Edge_Sampling(std::mt19937& rng) {
     Image<uint8_t> rgb_image(256, 256, 3);
 
-    auto ref = Image<double>("../01_reference.png", 255.);
+    auto ref = Image<double>("../ref_edge_sampling.png", 255.);
 
     auto scene = Scene(TriangleMesh(
-                               {Vec2d(0.07, 0.05), Vec2d(0.46, 0.047), Vec2d(0.06, 0.51)},
+//                               {Vec2d(0.097, 0.05), Vec2d(0.46, 0.047), Vec2d(0.06, 0.51)},
+                               {Vec2d(0.0, 0.0), Vec2d(0.5, 0.0), Vec2d(0.0, 0.5)},
                                {Vec3i(0, 1, 2)},
 //                               {Color(tex1), Color(tex2), Color(RGBColor{1, 0, 0})}),
                                {Color(RGBColor{0.5, 0.5, 0.5})}),
@@ -240,8 +245,8 @@ int main() {
 //    Task1_Meshes_and_Textures(rng);
 //    Task2_Differentiable_SDF_primitives(rng);
 //    Task2_Differentiable_SDF_image(rng);
-    Task3_Texture_Derivatives(rng);
+//    Task3_Texture_Derivatives(rng);
     // not working
-//    Task3_Edge_Sampling(rng);
+    Task3_Edge_Sampling(rng);
 //    Edge_Sampling(rng);
 }

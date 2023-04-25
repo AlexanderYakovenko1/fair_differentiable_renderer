@@ -94,14 +94,14 @@ public:
 
         for (int i = 0; i < image.height(); ++i) {
             for (int j = 0; j < image.width(); ++j) {
-                double y_ = y_min_ + double(i) / image.width() * (y_max_ - y_min_);
-                double x_ = x_min_ + double(j) / image.height() * (x_max_ - x_min_);
+                double y_ = y_min_ + double(i) / image.height() * (y_max_ - y_min_);
+                double x_ = x_min_ + double(j) / image.width() * (x_max_ - x_min_);
 
                 std::vector<RGBColor> colors;
                 std::vector<double> weights;
                 for (int trial = 0; trial < num_samples; ++trial) {
-                    double x = x_ + dist(rng) / image.height();
-                    double y = y_ + dist(rng) / image.width();
+                    double x = x_ + dist(rng) / image.width();
+                    double y = y_ + dist(rng) / image.height();
 
                     std::vector<double> alphas;  // alpha mixing coefficients of final color in sample
                     std::vector<std::vector<double>> Dparams;
@@ -224,6 +224,55 @@ public:
 //        std::cout << "YO" << std::endl;
 
         // fill retval
+        {
+            Dscene.push_back(mesh_.grad());
+            for (auto& object : objects_) {
+                Dscene.push_back(object->grad());
+            }
+        }
+
+        return Dscene;
+    }
+
+    std::vector<std::pair<std::vector<double>,std::vector<double>>> EdgeSampling(std::mt19937& rng, const Image<double>& reference, int num_samples=10000, double eps=1e-3) {
+        std::vector<std::pair<std::vector<double>,std::vector<double>>> Dscene;
+
+        auto Dcolor = mesh_.Dcolor(0.0, 0.0); // placeholder for ease of use
+        for (auto& col : Dcolor) {
+            col *= 0;
+        }
+        for (int i = 0; i < num_samples; ++i) {
+            Vec2d p, p_in, p_out;
+            auto Dparam = mesh_.RandomEdgePoints(rng, p, p_in, p_out);
+
+            int xi = (p.x - x_min_) / (x_max_ - x_min_) * reference.width();
+            int yi = (p.y - y_min_) / (y_max_ - y_min_) * reference.height();
+
+            if (xi < 0 || yi < 0 || xi > reference.width() || yi > reference.height()) {
+                continue;
+            }
+
+            auto color = sample(p.x, p.y);
+            auto color_in = sample(p_in.x, p_in.y);
+            auto color_out = sample(p_out.x, p_out.y);
+
+            RGBColor ref_color = {
+                    reference(yi, xi, 0) != 0 ? color_in.r : 0.0,
+                    reference(yi, xi, 1) != 0 ? color_in.g : 0.0,
+                    reference(yi, xi, 2) != 0 ? color_in.b : 0.0,
+            };
+
+            auto adj = (color_in.r - color_out.r) * (color.r - ref_color.r) +
+                       (color_in.g - color_out.g) * (color.g - ref_color.g) +
+                       (color_in.b - color_out.b) * (color.b - ref_color.b);
+            for (auto& param : Dparam) {
+                param *= adj;
+            }
+
+            mesh_.accumulateGrad(Dparam, Dcolor);
+        }
+
+
         {
             Dscene.push_back(mesh_.grad());
             for (auto& object : objects_) {
