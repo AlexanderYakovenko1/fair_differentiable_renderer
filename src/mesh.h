@@ -9,6 +9,15 @@ class Triangle: public SDF {
     Color color_;
 
     std::vector<double> accumulated_;
+
+    std::pair<double, Vec2d> closestPoint(Vec2d p, Vec2d a, Vec2d b) {
+        auto ab = b - a;
+        auto ap = p - a;
+
+        auto t = ab * ap / (ab * ab);
+        auto closest = a + b * t;
+        return {t, closest};
+    }
 public:
     Triangle(Vec2d p0, Vec2d p1, Vec2d p2, Color col):
             p0_(p0), p1_(p1), p2_(p2),
@@ -84,9 +93,68 @@ public:
         color_.updateParams(color);
     }
 
-    std::vector<double> Dparam(double x, double y) override {
+    std::vector<double> Dmesh(double x, double y, Vec2d& p_in, Vec2d& p_out, bool& found) {
         // edge sampling(?)
-        return {0., 0., 0., 0., 0., 0.};
+        std::vector<double> d(6, 0.);
+        return d;
+
+        // finds closest segment
+        Vec2d p(x, y);
+
+        int closest_idx = -1;
+        double closest_t;
+        Vec2d closest_point;
+        Vec2d closest_normal;
+        double closest_dist = std::numeric_limits<double>::max();
+        int i = 0;
+        for (auto [a, b] : {std::make_pair(p0_, p1_),
+                            std::make_pair(p1_, p2_),
+                            std::make_pair(p2_, p0_)}) {
+            auto [t, closest] = closestPoint(p, a, b);
+
+            auto dist = (p - closest).norm();
+            if (0 < t && t < 1 && dist < closest_dist) {
+                closest_idx = i;
+                closest_t = t;
+                closest_point = closest;
+                closest_normal = -(b - a).normalize().transpose();
+
+                closest_dist = dist;
+            }
+            ++i;
+        }
+
+        double THR = 1e-2;
+        if (closest_idx != -1 && closest_dist < THR) {
+            // mirror p on closest edge to get inner or outer point of triangle
+//            auto other = p + (closest_point - p) * 2;
+//            auto normal = (closest_point - p).normalize();
+//            if (distance(x, y) < 1e-3) {
+//                normal = -normal;
+//            }
+            p_in = p - closest_normal * 1e-3;
+            p_out = p + closest_normal * 1e-3;
+            found = true;
+//            std::cout << "idx: " << closest_idx << std::endl;
+            if (closest_idx == 0) {
+                d[0] = (1 - closest_t) * closest_normal.x;
+                d[1] = (1 - closest_t) * closest_normal.y;
+                d[2] = (    closest_t) * closest_normal.x;
+                d[3] = (    closest_t) * closest_normal.y;
+            } else if (closest_idx == 1) {
+                d[2] = (1 - closest_t) * closest_normal.x;
+                d[3] = (1 - closest_t) * closest_normal.y;
+                d[4] = (    closest_t) * closest_normal.x;
+                d[5] = (    closest_t) * closest_normal.y;
+            } else {
+                d[4] = (1 - closest_t) * closest_normal.x;
+                d[5] = (1 - closest_t) * closest_normal.y;
+                d[0] = (    closest_t) * closest_normal.x;
+                d[1] = (    closest_t) * closest_normal.y;
+            }
+        }
+
+        return d;
     }
 
     std::vector<double> Dcolor(double x, double y) override {
@@ -198,12 +266,15 @@ public:
         }
     }
 
-    std::vector<double> Dparam(double x, double y) override {
+    std::vector<double> Dmesh(double x, double y, Vec2d& p_in, Vec2d& p_out, bool& found) {
         std::vector<double> d;
         for (auto& tr : triangles_) {
-            auto D = tr.Dparam(x, y);
+            auto D = tr.Dmesh(x, y, p_in, p_out, found);
             d.insert(d.end(), D.begin(), D.end());
+            if (found) break;
         }
+        auto pad = std::vector<double>(triangles_.size() * 6 - d.size(), 0.0);
+        d.insert(d.end(), pad.begin(), pad.end());
 
         return d;
     }

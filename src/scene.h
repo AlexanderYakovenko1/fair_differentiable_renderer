@@ -41,6 +41,30 @@ class Scene {
     std::vector<std::shared_ptr<SDF>> objects_;             // all objects in the scene
     double x_min_, x_max_, y_min_, y_max_; // left right top bottom borders of scene
     RGBColor background_;
+
+    RGBColor sample(double x, double y, double eps=2e-3) {
+        RGBColor color = background_;
+
+        /// MESH
+        if (mesh_.distance(x, y) < eps) {
+            // as per task description has a_i = 1
+            // therefore overrides any other color in pixel
+            color = mesh_.getColor(x, y);
+        }
+        /// END MESH
+
+
+        /// SDF
+        for (const auto &object: objects_) {
+            double distance = object->distance(x, y);
+            RGBColor hit_color = object->getColor(x, y);
+            double alpha = smoothstep(0, eps, -distance);
+            color = MixColors(hit_color, color, alpha);
+        }
+        /// END SDF
+
+        return color;
+    }
 public:
     Scene(TriangleMesh mesh, const std::vector<std::shared_ptr<SDF>>& objects,
           double x_min, double x_max, double y_min, double y_max, RGBColor background)
@@ -87,6 +111,8 @@ public:
 
                     /// MESH
 
+                    Vec2d mesh_in, mesh_out;
+                    bool mesh_edge;
                     if (mesh_.distance(x, y) < eps) {
                         // as per task description has a_i = 1
                         // therefore overrides any other color in pixel
@@ -95,10 +121,15 @@ public:
                     } else {
                         alphas.push_back(0);
                     }
-                    Dedges.push_back(0); // step func, edge sampling goes here i guess
-                    Dparams.push_back(mesh_.Dparam(x, y));
+                    Dedges.push_back(-1); // step func, edge sampling goes here i guess
+                    Dparams.push_back(mesh_.Dmesh(x, y, mesh_in, mesh_out, mesh_edge));
                     Dcolors.push_back(mesh_.Dcolor(x, y));
 
+                    RGBColor color_in{}, color_out{};
+                    if (mesh_edge) {
+                        color_in = sample(mesh_in.x, mesh_in.y, eps);
+                        color_out = sample(mesh_out.x, mesh_out.y, eps);
+                    }
                     /// END MESH
 
 
@@ -143,9 +174,26 @@ public:
                             auto Dparam = Dparams[i];
                             auto Dcolor = Dcolors[i];
 
-                            for (auto& param : Dparam) {
-                                param *= -Dedge * alpha * (Dmse.r + Dmse.g + Dmse.b);
+                            if (i != 0) {
+                                // SDF branch
+                                for (auto &param: Dparam) {
+                                    param *= -Dedge * alpha * (Dmse.r + Dmse.g + Dmse.b);
+                                }
+                            } else {
+                                // Mesh branch
+                                RGBColor in_out = {
+                                        color_in.r - color_out.r,
+                                        color_in.g - color_out.g,
+                                        color_in.b - color_out.b,
+                                };
+                                for (auto &param: Dparam) {
+                                    param *= alpha * (
+                                            in_out.r * Dmse.r +
+                                            in_out.g * Dmse.g +
+                                            in_out.b * Dmse.b);
+                                }
                             }
+
                             /// rgb
                             for (int j = 0; j < Dcolor.size(); j += 3) {
                                 Dcolor[j + 0] *= alpha * Dmse.r;
