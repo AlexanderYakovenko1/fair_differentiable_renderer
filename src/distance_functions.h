@@ -8,6 +8,7 @@
 #include <algorithm>
 
 #include "color.h"
+#include "geometry.h"
 
 class SDF {
 public:
@@ -37,6 +38,9 @@ public:
     }
     virtual void updateParams(const std::vector<double> &param, const std::vector<double> &color) {
         return;
+    }
+    virtual std::vector<double> RandomEdgePoints(std::mt19937 &rng, Vec2d& p, Vec2d &p_in, Vec2d &p_out) {
+        return {};
     }
 };
 
@@ -96,6 +100,20 @@ public:
 
     std::vector<double> Dcolor(double x, double y) override {
         return color_.Dcolor(x, y);
+    }
+
+    std::vector<double> RandomEdgePoints(std::mt19937 &rng, Vec2d& p, Vec2d &p_in, Vec2d &p_out) {
+        std::uniform_real_distribution<double> th(-M_PI, M_PI);
+        double theta = th(rng);
+        double unit_x = sin(theta);
+        double unit_y = cos(theta);
+
+        Vec2d n(unit_x, unit_y);
+        p = Vec2d(x_ + radius_ * unit_x, y_ + radius_ * unit_y);
+        p_in = p - n * 1e-3;
+        p_out = p + n * 1e-3;
+
+        return {n.x, n.y, n.norm()};
     }
 };
 

@@ -70,20 +70,32 @@ double optimizeScene(Scene& scene, Image<uint8_t>& rgb_image, const Image<double
 
         std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
         auto grads = scene.RenderToImage(rgb_image, rng, 1, 2e-3, ref);
-        grads = scene.EdgeSampling(rng, ref);
+
         std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
 
-        if (save_progress) {
-            Save8bitRgbImage(output_dir + "/scene" + std::to_string(iter) + ".png", rgb_image);
-        }
-        if (verbose) {
-            std::cout << " Done" << std::endl;
-            std::cout << "It took: " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count()
-                      << " [µs]" << std::endl;
-        }
+
 
         std::vector<double> geom_grads;
         std::vector<double> color_grads;
+        for (auto [geom, color]: grads) {
+            geom_grads.insert(geom_grads.end(), geom.begin(), geom.end());
+            color_grads.insert(color_grads.end(), color.begin(), color.end());
+        }
+        std::cout << "TRUE:" << std::endl;
+        if (verbose) {
+            std::cout << "geom params: ";
+            PrintArray(geom_params);
+            std::cout << "geom grads: ";
+            PrintArray(geom_grads);
+            std::cout << "color params: ";
+            PrintArray(color_params);
+            std::cout << "color grads: ";
+            PrintArray(color_grads);
+        }
+        std::cout << "SAMPLED:" << std::endl;
+        geom_grads.clear();
+        color_grads.clear();
+        grads = scene.EdgeSampling(rgb_image,rng, ref);
         for (auto [geom, color]: grads) {
             geom_grads.insert(geom_grads.end(), geom.begin(), geom.end());
             color_grads.insert(color_grads.end(), color.begin(), color.end());
@@ -98,6 +110,14 @@ double optimizeScene(Scene& scene, Image<uint8_t>& rgb_image, const Image<double
             PrintArray(color_params);
             std::cout << "color grads: ";
             PrintArray(color_grads);
+        }
+        if (save_progress) {
+            Save8bitRgbImage(output_dir + "/scene" + std::to_string(iter) + ".png", rgb_image);
+        }
+        if (verbose) {
+            std::cout << " Done" << std::endl;
+            std::cout << "It took: " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count()
+                      << " [µs]" << std::endl;
         }
 
         opt_geom.step(geom_params, geom_grads, iter);
@@ -220,6 +240,22 @@ void Task3_Edge_Sampling(std::mt19937& rng) {
     std::cout << "MSE: " << calcMSE(rgb_image, ref) << std::endl;
 }
 
+void Task3_Edge_Sampling_SDF_primitives(std::mt19937& rng) {
+    Image<uint8_t> rgb_image(256, 256, 3);
+
+    auto ref = Image<double>("../02_reference.png", 255.);
+
+    auto scene = Scene({},{
+//            std::make_shared<AxisAlignedRectangle>(0.31, 0.28, 0.25, 0.25, Color(RGBColor{0.7, 0.7, 0.0})),
+            std::make_shared<Circle>(0.7, 0.7, 0.1, Color(RGBColor{0.543, 0.2232, 0.42})),
+            std::make_shared<Circle>(0.23, 0.72, 0.12, Color(RGBColor{0.1, 0.6, 1})),
+    }, 0, 1, 0, 1, RGBColor{0, 0, 0});
+
+    optimizeScene(scene, rgb_image, ref, rng, 150, "../edge_sdf_primitives_progress", 2e-3, 2e-3, true, true);
+    renderScene(scene, rgb_image, rng, "../task3_primitives.png");
+    std::cout << "MSE: " << calcMSE(rgb_image, ref) << std::endl;
+}
+
 void Edge_Sampling(std::mt19937& rng) {
     Image<uint8_t> rgb_image(256, 256, 3);
 
@@ -247,6 +283,7 @@ int main() {
 //    Task2_Differentiable_SDF_image(rng);
 //    Task3_Texture_Derivatives(rng);
     // not working
-    Task3_Edge_Sampling(rng);
+//    Task3_Edge_Sampling(rng);
+    Task3_Edge_Sampling_SDF_primitives(rng);
 //    Edge_Sampling(rng);
 }

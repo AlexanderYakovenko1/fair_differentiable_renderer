@@ -58,7 +58,8 @@ class Scene {
         for (const auto &object: objects_) {
             double distance = object->distance(x, y);
             RGBColor hit_color = object->getColor(x, y);
-            double alpha = smoothstep(0, eps, -distance);
+//            double alpha = smoothstep(0, eps, -distance);
+            double alpha = (distance < eps);
             color = MixColors(hit_color, color, alpha);
         }
         /// END SDF
@@ -234,42 +235,69 @@ public:
         return Dscene;
     }
 
-    std::vector<std::pair<std::vector<double>,std::vector<double>>> EdgeSampling(std::mt19937& rng, const Image<double>& reference, int num_samples=10000, double eps=1e-3) {
+    std::vector<std::pair<std::vector<double>,std::vector<double>>> EdgeSampling(Image<uint8_t>& image, std::mt19937& rng, const Image<double>& reference, int num_samples=10000, double eps=1e-3) {
+
+        // TODO: add flag
+        // zero the gradients
+        mesh_.zeroGrad();
+        for (const auto &object: objects_) {
+            object->zeroGrad();
+        }
+
         std::vector<std::pair<std::vector<double>,std::vector<double>>> Dscene;
 
-        auto Dcolor = mesh_.Dcolor(0.0, 0.0); // placeholder for ease of use
-        for (auto& col : Dcolor) {
-            col *= 0;
-        }
-        for (int i = 0; i < num_samples; ++i) {
-            Vec2d p, p_in, p_out;
-            auto Dparam = mesh_.RandomEdgePoints(rng, p, p_in, p_out);
+        for (int obj_idx = 0; obj_idx < objects_.size() + 1; ++ obj_idx) {
+            SDF* obj;
+            if (obj_idx == 0) {
+                obj = &mesh_;
+            } else {
+                obj = objects_[obj_idx - 1].get();
+            }
 
-            int xi = (p.x - x_min_) / (x_max_ - x_min_) * reference.width();
-            int yi = (p.y - y_min_) / (y_max_ - y_min_) * reference.height();
-
-            if (xi < 0 || yi < 0 || xi > reference.width() || yi > reference.height()) {
+            auto Dcolor = obj->Dcolor(0.0, 0.0); // placeholder for ease of use
+            for (auto &col: Dcolor) {
+                col *= 0;
+            }
+            if (Dcolor.size() == 0) {
                 continue;
             }
+            for (int i = 0; i < num_samples; ++i) {
+                Vec2d p, p_in, p_out;
+                auto Dparam = obj->RandomEdgePoints(rng, p, p_in, p_out);
 
-            auto color = sample(p.x, p.y);
-            auto color_in = sample(p_in.x, p_in.y);
-            auto color_out = sample(p_out.x, p_out.y);
+                int xi = round((p.x - x_min_) / (x_max_ - x_min_) * reference.width());
+                int yi = round((p.y - y_min_) / (y_max_ - y_min_) * reference.height());
 
-            RGBColor ref_color = {
-                    reference(yi, xi, 0) != 0 ? color_in.r : 0.0,
-                    reference(yi, xi, 1) != 0 ? color_in.g : 0.0,
-                    reference(yi, xi, 2) != 0 ? color_in.b : 0.0,
-            };
+                if (xi < 0 || yi < 0 || xi > reference.width() || yi > reference.height()) {
+                    continue;
+                }
 
-            auto adj = (color_in.r - color_out.r) * (color.r - ref_color.r) +
-                       (color_in.g - color_out.g) * (color.g - ref_color.g) +
-                       (color_in.b - color_out.b) * (color.b - ref_color.b);
-            for (auto& param : Dparam) {
-                param *= adj;
+                auto color = sample(p.x, p.y, 0);
+                auto color_in = sample(p_in.x, p_in.y, 0);
+                auto color_out = sample(p_out.x, p_out.y, 0);
+
+//                RGBColor ref_color = {
+//                        reference(yi, xi, 0) != 0 ? color_in.r : 0.0,
+//                        reference(yi, xi, 1) != 0 ? color_in.g : 0.0,
+//                        reference(yi, xi, 2) != 0 ? color_in.b : 0.0,
+//                };
+                RGBColor ref_color = {
+                        reference(yi, xi, 0),
+                        reference(yi, xi, 1),
+                        reference(yi, xi, 2),
+                };
+
+                auto adj = (color_in.r - color_out.r) * (color.r - ref_color.r) +
+                           (color_in.g - color_out.g) * (color.g - ref_color.g) +
+                           (color_in.b - color_out.b) * (color.b - ref_color.b);
+                for (auto &param: Dparam) {
+                    param *= adj;
+                }
+
+                obj->accumulateGrad(Dparam, Dcolor);
+
+                image(yi, xi, 0) += 100;
             }
-
-            mesh_.accumulateGrad(Dparam, Dcolor);
         }
 
 
