@@ -56,7 +56,8 @@ double optimizeScene(Scene& scene, Image<uint8_t>& rgb_image, const Image<double
     Adam opt_geom(geom_params, geom_lr, 0.9, 0.9);
     Adam opt_color(color_params, color_lr, 0.9, 0.9);
 
-    for (int iter = 1; iter < n_iters; ++iter) {
+    long runtime = 0;
+    for (int iter = 1; iter <= n_iters; ++iter) {
         params = scene.params();
         geom_params.clear();
         color_params.clear();
@@ -81,6 +82,7 @@ double optimizeScene(Scene& scene, Image<uint8_t>& rgb_image, const Image<double
             std::cout << "It took: " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count()
                       << " [µs]" << std::endl;
         }
+        runtime += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
 
         std::vector<double> geom_grads;
         std::vector<double> color_grads;
@@ -115,13 +117,15 @@ double optimizeScene(Scene& scene, Image<uint8_t>& rgb_image, const Image<double
         }
         scene.updateScene(params);
     }
-//    std::cout << "MSE: " << calcMSE(rgb_image, ref) << std::endl;
+    std::cout << "Average time for one iteration: " << runtime / n_iters << " [µs]" << std::endl;
+
     return calcMSE(rgb_image, ref);
 }
 
 
 // Shows that meshes and textures are supported
 void Task1_Meshes_and_Textures(std::mt19937& rng) {
+    std::cout << "=========== Task1: Meshes & Textures ===========" << std::endl;
     Image<uint8_t> rgb_image(256, 256, 3);
 
     auto grass = Image<double>("../grass_64.png", 255.);
@@ -138,6 +142,7 @@ void Task1_Meshes_and_Textures(std::mt19937& rng) {
 }
 
 void Task2_Differentiable_SDF_primitives(std::mt19937& rng) {
+    std::cout << "============= Task2: Primitive SDF =============" << std::endl;
     Image<uint8_t> rgb_image(256, 256, 3);
 
     auto ref = Image<double>("../02_reference.png", 255.);
@@ -154,6 +159,7 @@ void Task2_Differentiable_SDF_primitives(std::mt19937& rng) {
 }
 
 void Task2_Differentiable_SDF_image(std::mt19937& rng) {
+    std::cout << "=============== Task2: SDF Image ===============" << std::endl;
     Image<uint8_t> rgb_image(1024, 1024, 3);
 
     auto ref = Image<double>("../ACDC_logo.jpg", 255.);
@@ -168,6 +174,7 @@ void Task2_Differentiable_SDF_image(std::mt19937& rng) {
 }
 
 void Task3_Texture_Derivatives(std::mt19937& rng) {
+    std::cout << "================ Task3: Texture ================" << std::endl;
     Image<uint8_t> rgb_image(256, 256, 3);
 
     auto ref = Image<double>("../0_3_reference.png", 255.);
@@ -192,7 +199,34 @@ void Task3_Texture_Derivatives(std::mt19937& rng) {
     std::cout << "MSE: " << calcMSE(rgb_image, ref) << std::endl;
 }
 
+void Task3_HiRes_Texture_Derivatives(std::mt19937& rng) {
+    std::cout << "============= Task3: HiRes Texture =============" << std::endl;
+    Image<uint8_t> rgb_image(256, 256, 3);
+
+    auto ref = Image<double>("../0_3_reference.png", 255.);
+
+    auto tex1 = Image<double>(64, 64, 3);
+    auto tex2 = Image<double>(64, 64, 3);
+    for (int i = 0; i < tex1.size(); ++i) {
+        tex1(0, 0, i) = 0.5;
+        tex2(0, 0, i) = 0.5;
+    }
+
+    auto scene = Scene(TriangleMesh(
+                               {Vec2d(0.0, 0.0), Vec2d(0.5, 0.0), Vec2d(0.0, 0.5),
+                                Vec2d(0.5, 0.0), Vec2d(1.0, 0.0), Vec2d(0.5, 0.5),
+                                Vec2d(0.0, 0.5), Vec2d(0.5, 0.5), Vec2d(0.0, 1.0)},
+                               {Vec3i(0, 1, 2), Vec3i(3, 4, 5), Vec3i(6, 7, 8)},
+                               {Color(tex1), Color(tex2), Color(RGBColor{1, 0, 0})}),{},
+                       0, 1, 0, 1, RGBColor{0, 0, 0});
+
+    optimizeScene(scene, rgb_image, ref, rng, 300, "../hires_texture_progress");
+    renderScene(scene, rgb_image, rng, "../task3_hires_texture.png");
+    std::cout << "MSE: " << calcMSE(rgb_image, ref) << std::endl;
+}
+
 void Task3_Edge_Sampling(std::mt19937& rng) {
+    std::cout << "============= Task3: Edge Sampling =============" << std::endl;
     Image<uint8_t> rgb_image(256, 256, 3);
 
     auto ref = Image<double>("../01_reference.png", 255.);
@@ -210,7 +244,6 @@ void Task3_Edge_Sampling(std::mt19937& rng) {
                                 Vec2d(0.0, 0.45), Vec2d(0.45, 0.51), Vec2d(0.0, 0.86)},
                                {Vec3i(0, 1, 2), Vec3i(3, 4, 5), Vec3i(6, 7, 8)},
                                {Color(tex1), Color(tex2), Color(RGBColor{1, 0, 0})}),
-//                               {Color(RGBColor{0.5, 0.5, 0.5}), Color(RGBColor{0.5, 0.5, 0.5}), Color(RGBColor{1, 0, 0})}),
                        {std::make_shared<Circle>(0.7, 0.7, 0.1, Color(RGBColor{0.543, 0.2232, 0.42}))},
                        0, 1, 0, 1, RGBColor{0, 0, 0});
 
@@ -220,33 +253,13 @@ void Task3_Edge_Sampling(std::mt19937& rng) {
     std::cout << "MSE: " << calcMSE(rgb_image, ref) << std::endl;
 }
 
-void Edge_Sampling(std::mt19937& rng) {
-    Image<uint8_t> rgb_image(256, 256, 3);
-
-    auto ref = Image<double>("../ref_edge_sampling.png", 255.);
-
-    auto scene = Scene(TriangleMesh(
-//                               {Vec2d(0.097, 0.05), Vec2d(0.46, 0.047), Vec2d(0.06, 0.51)},
-                               {Vec2d(0.0, 0.0), Vec2d(0.5, 0.0), Vec2d(0.0, 0.5)},
-                               {Vec3i(0, 1, 2)},
-//                               {Color(tex1), Color(tex2), Color(RGBColor{1, 0, 0})}),
-                               {Color(RGBColor{0.5, 0.5, 0.5})}),
-                       {},
-                       0, 1, 0, 1, RGBColor{0, 0, 0});
-
-    optimizeScene(scene, rgb_image, ref, rng, 300, "../sample_progress", true, true);
-    renderScene(scene, rgb_image, rng, "../rec_edge_sampling.png");
-    std::cout << "MSE: " << calcMSE(rgb_image, ref) << std::endl;
-}
-
 int main() {
     std::mt19937 rng(1337);
 
-//    Task1_Meshes_and_Textures(rng);
-//    Task2_Differentiable_SDF_primitives(rng);
-//    Task2_Differentiable_SDF_image(rng);
-//    Task3_Texture_Derivatives(rng);
-    // not working
+    Task1_Meshes_and_Textures(rng);
+    Task2_Differentiable_SDF_primitives(rng);
+    Task2_Differentiable_SDF_image(rng);
+    Task3_Texture_Derivatives(rng);
+    Task3_HiRes_Texture_Derivatives(rng);
     Task3_Edge_Sampling(rng);
-//    Edge_Sampling(rng);
 }

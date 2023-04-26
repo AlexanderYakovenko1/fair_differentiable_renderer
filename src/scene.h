@@ -241,6 +241,9 @@ public:
         for (auto& col : Dcolor) {
             col *= 0;
         }
+        if (Dcolor.empty()) {
+            num_samples = 0;
+        }
         for (int i = 0; i < num_samples; ++i) {
             Vec2d p, p_in, p_out;
             auto Dparam = mesh_.RandomEdgePoints(rng, p, p_in, p_out);
