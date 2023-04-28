@@ -162,10 +162,10 @@ void Task2_Differentiable_SDF_image(std::mt19937& rng) {
     std::cout << "=============== Task2: SDF Image ===============" << std::endl;
     Image<uint8_t> rgb_image(1024, 1024, 3);
 
-    auto ref = Image<double>("../ACDC_logo.jpg", 255.);
+    auto ref = Image<double>("../logo_1k.png", 255.);
 
-    auto scene = Scene({}, { //0.6, 0.7, 0.1, 0.15 // 0.85, 0.3, 0.6
-            std::make_shared<SDFImage>(64, 64, 0.5, 0.5, 1., Color(RGBColor{0.9, 0.9, 0.9})),
+    auto scene = Scene({}, {
+            std::make_shared<SDFImage>(96, 96, 0.5, 0.5, 1., Color(RGBColor{0.9, 0.9, 0.9})),
     }, 0, 1, 0, 1, RGBColor{0, 0, 0});
 
     optimizeScene(scene, rgb_image, ref, rng, 100, "../sdf_image_progress");

@@ -1,6 +1,12 @@
 # Differentiable rendering
 Task from the Forward and Inverse Rendering course at CMC MSU
 
+## Galery
+| Differentiable SDF primitives                                                  | Differentiable image SDF                                                              | Edge Sampling + Textures                                                          |
+|--------------------------------------------------------------------------------|---------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------|
+| <center>Reference image<br/>![Reference](02_reference.png)</center>            | <center>Reference image<br/><img src="logo_1k.png" width="256" height="256"></center> | <center>Reference image<br/>![Images](01_reference.png)</center>                  |
+| <center>Optimization process<br/>![Reconstuction](viz/primitives.gif)</center> | <center>Optimization process<br/>![Reconstuction](viz/sdf_image.gif)</center>         | <center>Optimization process<br/>![Reconstuction](viz/edge_textures.gif)</center> |
+
 ## Done
 ### Main
 - [x] **(3 points)** Non-differentiable rendering of meshes and SDFs.  
